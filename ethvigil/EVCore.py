@@ -50,7 +50,7 @@ def generate_contract_function(**outer_kwargs):
         if request_type == 'get':
             for arg in params_args:
                 # to construct get request like /getPostId/{id} or /2daccessor/{param1}/{param2}
-                request_url += arg + '/'
+                request_url +=  '/' + arg
             request_url = request_url.rstrip('/')
             r = make_http_call(request_type='get', url=request_url)
             return r['data'][0]

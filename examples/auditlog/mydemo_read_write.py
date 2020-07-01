@@ -111,6 +111,7 @@ def main():
             last_tx = demo_contract_instance.setContractInformation(**params)[0]['txHash']
             print('\n\nSending tx to setContractInformation with params: ', params)
             print('setContractInformation tx response: ', last_tx)
+            print('Waiting for event update payload...')
         p = update_q.get()
         p = json.loads(p)
 

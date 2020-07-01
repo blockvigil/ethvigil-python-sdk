@@ -19,7 +19,7 @@ contract myDemoContract {
         contractInformation.contractLicenseId = initLicenseid;
     }
 
-    function setContractInformation(uint8 incrValue, string memory _note) public payable {
+    function setContractInformation(uint8 incrValue, string memory _note) public {
         require(
             keccak256(abi.encodePacked(_note)) !=
             keccak256(abi.encodePacked(contractInformation.note))

@@ -29,7 +29,7 @@ def handle_service_exit(func):
             return func(*args, **kwargs)
         except (ServiceExit, KeyboardInterrupt):
             t.shutdown_flag.set()
-            print('Waiting for Websocket subscriber thread to join (Dont press Ctrl-C again!)...')
+            print('Waiting for Websocket subscriber thread to join (Ctrl-C in case thread is stuck)...')
             t.join()
             print('Websocket subscriber thread exited')
     return wrapper
@@ -118,9 +118,9 @@ def main():
         if p.get('type') == 'event' \
                 and p['event_name'] == 'ContractIncremented' \
                 and p['txHash'] == last_tx:
-            last_tx = None
             print('\nReceived websocket payload:', p, '\n\n')
             print('Received setContractInformation event confirmation: ', last_tx)
+            last_tx = None
             print('Writing to audit log contract...')
             audit_tx = auditlog_contract_instance.addAuditLog(
                 _newNote=p['event_data']['newNote'],
@@ -129,6 +129,8 @@ def main():
                 _timestamp=p['ctime']
             )
             print('Wrote to audit log contract. Tx response: ', audit_tx[0]['txHash'])
+            # quit after the first transaction, feel free to comment this out to try multiple calls
+            raise KeyboardInterrupt
         update_q.task_done()
         time.sleep(5)
 

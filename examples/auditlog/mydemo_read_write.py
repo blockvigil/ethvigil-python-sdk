@@ -34,26 +34,6 @@ def handle_service_exit(func):
             print('Websocket subscriber thread exited')
     return wrapper
 
-
-class EthVigilWSSubscriber(threading.Thread):
-    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, daemon=None):
-        super().__init__(group=group, target=target, name=name, daemon=daemon)
-        self._args = args
-        self._kwargs = kwargs
-        self._api_read_key = self._kwargs['api_read_key']
-        self._update_q = self._kwargs['update_q']
-        self._ev_loop = self._kwargs['ev_loop']
-
-        self.shutdown_flag = threading.Event()
-
-    def run(self) -> None:
-        asyncio.set_event_loop(self._ev_loop)
-        asyncio.get_event_loop().run_until_complete(consumer_contract(self._api_read_key, self._update_q))
-        while not self.shutdown_flag.is_set():
-            time.sleep(1)
-        # print('Stopping thread ', self.ident)
-
-
 async def async_shutdown(signal, loop):
     # print(f'Received exit signal {signal.name}...')
     # print('Nacking outstanding messages')

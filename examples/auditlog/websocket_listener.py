@@ -25,6 +25,7 @@ async def consumer_contract(read_api_key, update_q: queue.Queue):
                 await ws.close()
                 return
         sessionID = ack['sessionID']
+        print('\nReceived Websocket Session ID: ', sessionID)
         # async for msg in ws:
         #    print(msg)
         while True:

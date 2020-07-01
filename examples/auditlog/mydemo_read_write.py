@@ -29,7 +29,7 @@ def handle_service_exit(func):
             return func(*args, **kwargs)
         except (ServiceExit, KeyboardInterrupt):
             t.shutdown_flag.set()
-            print('Waiting for Websocket subscriber thread to join...')
+            print('Waiting for Websocket subscriber thread to join (Dont press Ctrl-C again!)...')
             t.join()
             print('Websocket subscriber thread exited')
     return wrapper
@@ -79,7 +79,7 @@ def deploy_contracts():
     while True:
         websocket_payload = update_q.get()
         websocket_payload = json.loads(websocket_payload)
-        if websocket_payload.get('type') == 'contractmon':
+        if websocket_payload.get('type') == 'contractmon' or websocket_payload.get('type') == 'otm':
             if websocket_payload['txHash'] == demo_contract_deploying_tx:
                 print('\nReceived myDemoContract deployment confirmation: ', demo_contract_deploying_tx)
                 demo_contract_deployed = True

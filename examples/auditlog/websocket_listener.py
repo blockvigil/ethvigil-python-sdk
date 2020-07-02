@@ -3,7 +3,6 @@ import websockets
 import asyncio
 import async_timeout
 import queue
-from exceptions import ServiceExit
 import threading
 import time
 
@@ -40,7 +39,7 @@ async def consumer_contract(read_api_key, update_q: queue.Queue):
                 ack = await ws.recv()
                 # print(ack)
             except asyncio.CancelledError:
-                # print('Received cancel on WS listener coro')
+                print('Websocket subscriber task exiting. Sending UNREGISTER...')
                 try:
                     await ws.send(json.dumps({'command': 'unregister', 'key': read_api_key}))
                     ack = await ws.recv()
@@ -49,6 +48,7 @@ async def consumer_contract(read_api_key, update_q: queue.Queue):
                     pass
                 finally:
                     break
+
 
 
 class EthVigilWSSubscriber(threading.Thread):
@@ -66,10 +66,10 @@ class EthVigilWSSubscriber(threading.Thread):
         asyncio.set_event_loop(self._ev_loop)
         try:
             asyncio.get_event_loop().run_until_complete(consumer_contract(self._api_read_key, self._update_q))
+        except RuntimeError:
+            pass
+        finally:
             while not self.shutdown_flag.is_set():
                 time.sleep(1)
-        except ServiceExit:
-            pass
-        except Exception as e:
-            print('Received exception in child thread\n', e, e.__context__)
-        # print('Stopping thread ', self.ident)
+            else:
+                print('Stopping thread ', self.ident)

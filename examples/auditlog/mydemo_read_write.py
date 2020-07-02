@@ -10,6 +10,7 @@ import json
 from websocket_listener import consumer_contract, EthVigilWSSubscriber
 from exceptions import ServiceExit
 
+main_loop = asyncio.get_event_loop()
 update_q = queue.Queue()
 
 evc = EVCore(verbose=False)
@@ -18,40 +19,15 @@ api_read_key = evc._api_read_key
 t = EthVigilWSSubscriber(kwargs={
         'api_read_key': api_read_key,
         'update_q': update_q,
-        'ev_loop': asyncio.get_event_loop()
+        'ev_loop': main_loop
     })
 t.start()
 
-def handle_service_exit(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except (ServiceExit, KeyboardInterrupt):
-            t.shutdown_flag.set()
-            print('Waiting for Websocket subscriber thread to join (Ctrl-C in case thread is stuck)...')
-            t.join()
-            print('Websocket subscriber thread exited')
-    return wrapper
-
-async def async_shutdown(signal, loop):
-    # print(f'Received exit signal {signal.name}...')
-    # print('Nacking outstanding messages')
-    tasks = [t for t in asyncio.Task.all_tasks() if t is not
-             asyncio.Task.current_task()]
-
-    [task.cancel() for task in tasks]
-
-    # print(f'Cancelling {len(tasks)} outstanding tasks')
-    await asyncio.gather(*tasks)
-    loop.stop()
-    # print('Event loop Shutdown complete.')
-
-
-def sync_shutdown(signum, frame):
-    # print('Caught signal %d' % signum)
-    raise ServiceExit
-
+def close_ws_thread():
+    t.shutdown_flag.set()
+    print('Waiting for Websocket subscriber thread to join (Ctrl-C in case thread is stuck)...')
+    t.join()
+    print('Websocket subscriber thread exited')
 
 def deploy_contracts():
     print('Deploying myDemoContract...')
@@ -92,7 +68,6 @@ def deploy_contracts():
         time.sleep(1)
     return demo_contract_addr, audit_log_contract_addr
 
-@handle_service_exit
 def main():
     demo_contract, auditlog_contract = deploy_contracts()
     demo_contract_instance = evc.generate_contract_sdk(
@@ -104,23 +79,21 @@ def main():
         app_name='myAuditLog'
     )
 
-    last_tx = None
+    params = {'incrValue': random.choice(range(1, 255)), '_note': 'NewNote' + str(int(time.time())) }
+    last_tx = demo_contract_instance.setContractInformation(**params)[0]['txHash']
+    print('\n\nSending tx to setContractInformation with params: ', params)
+    print('setContractInformation tx response: ', last_tx)
+    print('Waiting for event update payload...')
     while True:
-        if not last_tx:
-            params = {'incrValue': random.choice(range(1, 255)), '_note': 'NewNote' + str(int(time.time())) }
-            last_tx = demo_contract_instance.setContractInformation(**params)[0]['txHash']
-            print('\n\nSending tx to setContractInformation with params: ', params)
-            print('setContractInformation tx response: ', last_tx)
-            print('Waiting for event update payload...')
         p = update_q.get()
         p = json.loads(p)
+        update_q.task_done()
 
         if p.get('type') == 'event' \
                 and p['event_name'] == 'ContractIncremented' \
                 and p['txHash'] == last_tx:
             print('\nReceived websocket payload:', p, '\n\n')
             print('Received setContractInformation event confirmation: ', last_tx)
-            last_tx = None
             print('Writing to audit log contract...')
             audit_tx = auditlog_contract_instance.addAuditLog(
                 _newNote=p['event_data']['newNote'],
@@ -130,20 +103,27 @@ def main():
             )
             print('Wrote to audit log contract. Tx response: ', audit_tx[0]['txHash'])
             # quit after the first transaction, feel free to comment this out to try multiple calls
-            raise KeyboardInterrupt
-        update_q.task_done()
+            break
         time.sleep(5)
+    raise ServiceExit
 
 
 if __name__ == '__main__':
-    main_loop = asyncio.get_event_loop()
     signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
-    for s in signals:
-        main_loop.add_signal_handler(
-            s, lambda s=s: asyncio.get_event_loop().create_task(async_shutdown(s, main_loop)))
-    for s in signals:
-        signal.signal(s, sync_shutdown)
     try:
         main()
-    except ServiceExit:
-        pass
+    except (ServiceExit, KeyboardInterrupt) as int_e:
+        try:
+            print('Attempting to stop main event loop')
+            main_loop.stop()
+        except Exception as e:
+            print('Exception attempting to stop main event loop...')
+            print(e)
+        else:
+            print('Main event loop stopped')
+        try:
+            print('Attempting to wait for WS subscriber thread to close...')
+            close_ws_thread()
+        except Exception as e:
+            print('Exception waiting on WS subscriber thread')
+            print(e)

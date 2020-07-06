@@ -1,7 +1,9 @@
 pragma solidity ^0.5.17;
 pragma experimental ABIEncoderV2;
 
-contract myDemoContract {
+import './Ownable.sol';
+
+contract myDemoContract is Ownable {
 
     struct ContractInfo {
         uint256 counter;

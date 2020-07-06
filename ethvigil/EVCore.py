@@ -8,6 +8,7 @@ import requests
 from .EVContractUtils import ABIParser, extract_abi
 from types import MethodType
 import inspect
+from solidity_parser import parser
 import sys
 import logging
 from .exceptions import *
@@ -207,14 +208,52 @@ class EVCore(object):
         if self._verbose:
             print('Got unordered constructor inputs: ')
             print(inputs)
-        abi_json = extract_abi(contract_file, self._settings)
+
+        sources = dict()
+
+        if contract_file[0] == '~':
+            contract_full_path = os.path.expanduser(contract_file)
+        else:
+            contract_full_path = contract_file
+        resident_directory = ''.join(map(lambda x: x + '/', contract_full_path.split('/')[:-1]))
+        contract_file_name = contract_full_path.split('/')[-1]
+        contract_file_obj = open(file=contract_full_path)
+
+        main_contract_src = ''
+        while True:
+            chunk = contract_file_obj.read(1024)
+            if not chunk:
+                break
+            main_contract_src += chunk
+        sources[f'ev-py-sdk/{contract_file_name}'] = {'content': main_contract_src}
+        # loop through imports and add them to sources
+        source_unit = parser.parse(main_contract_src)
+        source_unit_obj = parser.objectify(source_unit)
+
+        for each in source_unit_obj.imports:
+            import_location = each['path'].replace("'", "")
+            # TODO: follow specified relative paths and import such files too
+            if import_location[:2] != './':
+                ev_core_logger.error('You can only import files from within the same directory as of now')
+                raise EVBaseException('You can only import files from within the same directory as of now')
+            # otherwise read the file into the contents mapping
+            full_path = resident_directory + import_location[2:]
+            imported_contract_obj = open(full_path, 'r')
+            contract_src = ''
+            while True:
+                chunk = imported_contract_obj.read(1024)
+                if not chunk:
+                    break
+                contract_src += chunk
+            sources[f'ev-py-sdk/{import_location[2:]}'] = {'content': contract_src}
+
+        abi_json = extract_abi(self._settings, {'sources': sources, 'sourceFile': f'ev-py-sdk/{contract_file_name}'})
         abp = ABIParser(abi_json=abi_json)
         abp.load_abi()
         c_inputs = abp.ordered_map_to_ev_constructor_args(inputs)
         if self._verbose:
             print('Ordered constructor inputs: \n', c_inputs)
-        contract = open(os.path.join(sys.path[0],contract_file), mode='r')
-        contract_src = ''.join([_ for _ in read_file_by_chunks(contract)])
+
         msg = "Trying to deploy"
         message_hash = defunct_hash_message(text=msg)
         signed_msg = Account.signHash(message_hash, self._settings['PRIVATEKEY'])
@@ -223,7 +262,8 @@ class EVCore(object):
             'sig': signed_msg.signature.hex(),
             'name': contract_name,
             'inputs': c_inputs,
-            'code': contract_src
+            'sources': sources,
+            'sourceFile': f'ev-py-sdk/{contract_file_name}'
         }
         # --ETHVIGIL API CALL---
         r = make_http_call(request_type='post', url=self._settings['INTERNAL_API_ENDPOINT'] + '/deploy', params=deploy_json)

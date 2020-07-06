@@ -42,15 +42,16 @@ def read_file_by_chunks(fp, chunk_size=1024):
 #     compiled_output = solcx.compile_standard(compile_args)
 #     return compiled_output['contracts'][contract_filepath][contract_name]['abi']
 
-def extract_abi(contract_filepath, ev_settings, contract_name=None):
-    file_contents = ''.join([_ for _ in read_file_by_chunks(open(os.path.join(sys.path[0], contract_filepath), 'r'))])
+def extract_abi(ev_settings, parsed_sources):
     msg = "Trying to signup"
     message_hash = defunct_hash_message(text=msg)
     signed_msg = Account.signHash(message_hash, ev_settings['PRIVATEKEY'])
+    compile_params = {'msg': msg, 'sig': signed_msg.signature.hex()}
+    compile_params.update(parsed_sources)
     _resp = make_http_call(
         request_type='post',
         url=ev_settings['INTERNAL_API_ENDPOINT'] + '/compile',
-        params={'code': file_contents, 'msg': msg, 'sig': signed_msg.signature.hex()}
+        params=compile_params
     )
     return _resp['data']['contract']['abi']
 

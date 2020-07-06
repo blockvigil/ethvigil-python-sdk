@@ -1,4 +1,11 @@
-﻿## Prerequisite: Sign up for an EthVigil developer account
+﻿## Requirements
+
+* Python 3.6.5+
+
+It is also recommended that you make use of virtual environments on your development box to safely experiment with libraries and SDKs without breaking things at a system level. [A good guide to getting started with that can be found here](https://akrabat.com/creating-virtual-environments-with-pyenv/).
+
+
+## Sign up for an EthVigil developer account
 
 To use the EthVigil Python SDK, you need to be signed up for a beta developer account on https://beta.ethvigil.com 
 
